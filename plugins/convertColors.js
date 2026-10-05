@@ -21,6 +21,117 @@ const regRGB = new RegExp(
   '^rgb\\(\\s*' + rNumber + rComma + rNumber + rComma + rNumber + '\\s*\\)$',
 );
 const regHEX = /^#(([a-fA-F0-9])\2){3}$/;
+const regShortHEX = /^#([a-fA-F0-9])([a-fA-F0-9])([a-fA-F0-9])$/;
+const regLongHEX = /^#[a-fA-F0-9]{6}$/;
+
+/**
+ * Mapping of lowercased long hex colors (`#rrggbb`) to the shortest color
+ * keyword producing the same color.
+ *
+ * @type {Record<string, string>}
+ */
+const colorsHexNames = {};
+for (const [name, hex] of Object.entries(colorsNames)) {
+  const longHex = normalizeLongHex(hex);
+  if (longHex == null) {
+    continue;
+  }
+  const currentName = colorsHexNames[longHex];
+  if (currentName == null || name.length < currentName.length) {
+    colorsHexNames[longHex] = name;
+  }
+}
+
+/**
+ * Expand an hex color to its lowercased long `#rrggbb` form. Returns null
+ * for anything that is not a `#rgb` or `#rrggbb` color.
+ *
+ * @param {string} value
+ * @returns {string | null}
+ */
+function normalizeLongHex(value) {
+  const longMatch = regLongHEX.exec(value);
+  if (longMatch != null) {
+    return value.toLowerCase();
+  }
+  const shortMatch = regShortHEX.exec(value);
+  if (shortMatch != null) {
+    const [, r, g, b] = shortMatch;
+    return ('#' + r + r + g + g + b + b).toLowerCase();
+  }
+  return null;
+}
+
+/**
+ * Serialized length of a color value when it is embedded into a `css` data
+ * URI. The leading `#` of an hex color is percent encoded there, so it costs
+ * three characters instead of one.
+ *
+ * @param {string} value
+ * @returns {number}
+ */
+const cssColorLength = (value) => {
+  return value.startsWith('#') ? value.length + 2 : value.length;
+};
+
+/**
+ * Convert a color attribute value to its shortest representation inside a
+ * `css` data URI, comparing hex and keyword lengths after percent encoding.
+ * Values that are not plain colors (`none`, `currentColor`, `url(...)`,
+ * colors with alpha, ...) are returned untouched.
+ *
+ * @example
+ * '#ffffff' // 'white'
+ * '#000000' // 'black'
+ * '#ff00ff' // '#f0f' (six encoded chars, shorter than 'fuchsia')
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+const minimizeColorForCss = (value) => {
+  if (
+    value === 'none' ||
+    value === 'currentColor' ||
+    includesUrlReference(value)
+  ) {
+    return value;
+  }
+
+  let hex = normalizeLongHex(value);
+  if (hex == null && colorsNames[value.toLowerCase()] != null) {
+    hex = normalizeLongHex(colorsNames[value.toLowerCase()]);
+  }
+  if (hex == null) {
+    const match = value.match(regRGB);
+    if (match != null) {
+      const numbers = match.slice(1, 4).map((m) => {
+        let n;
+        if (m.indexOf('%') > -1) {
+          n = Math.round(parseFloat(m) * 2.55);
+        } else {
+          n = Number(m);
+        }
+        return Math.max(0, Math.min(n, 255));
+      });
+      hex = convertRgbToHex(numbers).toLowerCase();
+    }
+  }
+  if (hex == null) {
+    return value;
+  }
+
+  // short hex is the tie breaker, it avoids turning colors into keywords
+  // when there is no size benefit
+  let result = hex;
+  if (hex[1] === hex[2] && hex[3] === hex[4] && hex[5] === hex[6]) {
+    result = '#' + hex[1] + hex[3] + hex[5];
+  }
+  const keyword = colorsHexNames[hex];
+  if (keyword != null && keyword.length < cssColorLength(result)) {
+    result = keyword;
+  }
+  return result;
+};
 
 /**
  * Convert [r, g, b] to #rrggbb.
@@ -74,7 +185,7 @@ const convertRgbToHex = ([r, g, b]) => {
  *
  * @type {import('../lib/types.js').Plugin<ConvertColorsParams>}
  */
-export const fn = (_root, params) => {
+export const fn = (_root, params, info) => {
   const {
     currentColor = false,
     names2hex = true,
@@ -109,6 +220,13 @@ export const fn = (_root, params) => {
               if (matched) {
                 val = 'currentColor';
               }
+            }
+
+            // colors are serialized into a double quoted CSS url() data URI,
+            // so pick the shortest representation after percent encoding
+            if (info?.datauri === 'css') {
+              node.attributes[name] = minimizeColorForCss(val);
+              continue;
             }
 
             // convert color name keyword to long hex

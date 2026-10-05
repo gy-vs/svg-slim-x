@@ -11,6 +11,7 @@ import {
 
 expectType<Output>(optimize('<svg></svg>'));
 expectAssignable<DataUri>('enc');
+expectAssignable<DataUri>('css');
 
 expectType<Promise<Config | null>>(loadConfig());
 expectType<Promise<Config | null>>(loadConfig(undefined));

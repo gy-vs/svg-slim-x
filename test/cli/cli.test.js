@@ -84,6 +84,56 @@ test('output as stream when "-" is specified', async () => {
   expect(stdout).toBe('<svg/>');
 });
 
+test('should exit with 1 code on invalid datauri value', async () => {
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'bogus', '-'],
+    { cwd: __dirname },
+  );
+  proc.stdin.write('<svg/>');
+  proc.stdin.end();
+  const [code, stderr] = await Promise.all([
+    new Promise((resolve) => {
+      proc.on('close', (code) => {
+        resolve(code);
+      });
+    }),
+    new Promise((resolve) => {
+      proc.stderr.on('data', (error) => {
+        resolve(error.toString());
+      });
+    }),
+  ]);
+  expect(code).toBe(1);
+  expect(stderr.trim()).toBe(
+    "error: option '--datauri' must have one of the following values: 'base64', 'enc', 'unenc' or 'css'",
+  );
+});
+
+test('outputs css datauri without encoding it twice', async () => {
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'css', '-'],
+    { cwd: __dirname },
+  );
+  proc.stdin.write('<svg/>');
+  proc.stdin.end();
+  const stdout = await waitStdout(proc);
+  expect(stdout.trim()).toBe('data:image/svg+xml,%3Csvg/%3E');
+});
+
+test('outputs enc datauri without encoding it twice', async () => {
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'enc', '-'],
+    { cwd: __dirname },
+  );
+  proc.stdin.write('<svg/>');
+  proc.stdin.end();
+  const stdout = await waitStdout(proc);
+  expect(stdout.trim()).toBe('data:image/svg+xml,%3Csvg%2F%3E');
+});
+
 test('should exit with 1 code on syntax error', async () => {
   const proc = spawn('node', ['../../bin/svgo', '--no-color', 'invalid.svg'], {
     cwd: __dirname,

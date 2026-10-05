@@ -262,6 +262,8 @@ export type Visitor = {
 export type PluginInfo = {
   path?: string;
   multipassCount: number;
+  /** Configured `datauri` output format, when set. */
+  datauri?: DataUri;
 };
 
 export type Plugin<P = null> = (
@@ -330,7 +332,7 @@ export type PathDataItem = {
   args: number[];
 };
 
-export type DataUri = 'base64' | 'enc' | 'unenc';
+export type DataUri = 'base64' | 'enc' | 'unenc' | 'css';
 
 export type Config = {
   /** Can be used by plugins, for example prefixIds. */
