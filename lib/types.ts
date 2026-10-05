@@ -330,7 +330,7 @@ export type PathDataItem = {
   args: number[];
 };
 
-export type DataUri = 'base64' | 'enc' | 'unenc';
+export type DataUri = 'base64' | 'enc' | 'unenc' | 'css';
 
 export type Config = {
   /** Can be used by plugins, for example prefixIds. */
@@ -349,7 +349,10 @@ export type Config = {
   plugins?: PluginConfig[];
   /** Options for rendering optimized SVG from AST. */
   js2svg?: StringifyOptions;
-  /** Output as Data URI string. */
+  /**
+   * Output as Data URI string. The `css` format produces a Data URI that
+   * is safe to embed in a double-quoted CSS `url()` token.
+   */
   datauri?: DataUri;
 };
 

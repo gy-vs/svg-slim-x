@@ -9,6 +9,7 @@ import { includesUrlReference } from '../lib/svgo/tools.js';
  * @property {false | 'lower' | 'upper'=} convertCase
  * @property {boolean=} shorthex
  * @property {boolean=} shortname
+ * @property {import('../lib/types.js').DataUri=} datauri
  */
 
 export const name = 'convertColors';
@@ -21,6 +22,24 @@ const regRGB = new RegExp(
   '^rgb\\(\\s*' + rNumber + rComma + rNumber + rComma + rNumber + '\\s*\\)$',
 );
 const regHEX = /^#(([a-fA-F0-9])\2){3}$/;
+
+/**
+ * Mapping of #rrggbb colors to the shortest equivalent color name keyword.
+ *
+ * @type {Record<string, string>}
+ */
+const colorsHexToShortestName = {};
+for (const [name, hex] of Object.entries(colorsNames)) {
+  // normalize to the long #rrggbb form
+  const longHex =
+    hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex;
+  const shortestName = colorsHexToShortestName[longHex];
+  if (shortestName == null || name.length < shortestName.length) {
+    colorsHexToShortestName[longHex] = name;
+  }
+}
 
 /**
  * Convert [r, g, b] to #rrggbb.
@@ -82,6 +101,7 @@ export const fn = (_root, params) => {
     convertCase = 'lower',
     shorthex = true,
     shortname = true,
+    datauri,
   } = params;
 
   let maskCounter = 0;
@@ -159,7 +179,18 @@ export const fn = (_root, params) => {
             // convert hex to short name
             if (shortname) {
               const colorName = val.toLowerCase();
-              if (colorsShortNames[colorName] != null) {
+              if (datauri === 'css') {
+                // in CSS data URIs "#" is percent-encoded as "%23", so
+                // the shortest form is picked by encoded length
+                const longHex =
+                  colorName.length === 4 && colorName[0] === '#'
+                    ? `#${colorName[1]}${colorName[1]}${colorName[2]}${colorName[2]}${colorName[3]}${colorName[3]}`
+                    : colorName;
+                const name = colorsHexToShortestName[longHex];
+                if (name != null && name.length < colorName.length + 2) {
+                  val = name;
+                }
+              } else if (colorsShortNames[colorName] != null) {
                 val = colorsShortNames[colorName];
               }
             }

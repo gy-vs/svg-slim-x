@@ -60,6 +60,58 @@ test('accepts svg as string', async () => {
   expect(stdout).toBe('<svg/>');
 });
 
+test('outputs css datauri when flag specified', async () => {
+  const input =
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#fff"/></svg>';
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'css', '--string', input],
+    { cwd: __dirname },
+  );
+  const stdout = await waitStdout(proc);
+  expect(stdout).toBe(
+    `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='white'/%3E%3C/svg%3E`,
+  );
+});
+
+test('outputs datauri only once when flag specified', async () => {
+  const input =
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#fff"/></svg>';
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'enc', '--string', input],
+    { cwd: __dirname },
+  );
+  const stdout = await waitStdout(proc);
+  expect(stdout).toBe(
+    'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E',
+  );
+});
+
+test('exits with an error on unknown datauri format', async () => {
+  const proc = spawn(
+    'node',
+    ['../../bin/svgo', '--no-color', '--datauri', 'webp', '--string', '<svg/>'],
+    { cwd: __dirname },
+  );
+  const [code, stderr] = await Promise.all([
+    new Promise((resolve) => {
+      proc.on('close', (code) => {
+        resolve(code);
+      });
+    }),
+    new Promise((resolve) => {
+      proc.stderr.on('data', (error) => {
+        resolve(error.toString());
+      });
+    }),
+  ]);
+  expect(code).toBe(1);
+  expect(stderr).toBe(
+    `error: option '--datauri' must have one of the following values: 'base64', 'enc', 'unenc' or 'css'\n`,
+  );
+});
+
 test('accepts svg as filename', async () => {
   const proc = spawn(
     'node',
